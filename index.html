@@ -175,6 +175,18 @@
             background: #fafafa;
         }
 
+        .add-product-area {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .add-product-area label {
+             font-size: 0.9em;
+             margin-bottom: 8px;
+        }
+
         /* --- チャートとテーブル --- */
         .chart-container { background: #f8f9fa; border-radius: 8px; padding: 20px; text-align: center; min-height: 200px; display: flex; align-items: center; justify-content: center; color: #6c757d; }
         .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -228,12 +240,13 @@
             <div class="sidebar">
                 <div class="data-upload-section">
                     <h3>📁 データアップロード</h3>
-                    <div class="upload-item"><label>商品別売上データ (CSV)</label><input type="file" accept=".csv" id="productSalesUpload"><div id="status-productSales" class="upload-status" style="display: none;"></div></div>
-                    <div class="upload-item"><label>取引データ (CSV)</label><input type="file" accept=".csv" id="transactionUpload"><div id="status-transaction" class="upload-status" style="display: none;"></div></div>
-                    <div class="upload-item"><label>客層別売上 - 年代 (CSV)</label><input type="file" accept=".csv" id="ageUpload"><div id="status-age" class="upload-status" style="display: none;"></div></div>
-                    <div class="upload-item"><label>客層別売上 - 性別 (CSV)</label><input type="file" accept=".csv" id="genderUpload"><div id="status-gender" class="upload-status" style="display: none;"></div></div>
-                    <div class="upload-item"><label>客層別売上 - 来店回数 (CSV)</label><input type="file" accept=".csv" id="visitFrequencyUpload"><div id="status-visitFrequency" class="upload-status" style="display: none;"></div></div>
-                    <div class="upload-item"><label>客層別売上 - 来店目的 (CSV)</label><input type="file" accept=".csv" id="visitPurposeUpload"><div id="status-visitPurpose" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【必須】商品マスタ (スマレジCSV)</label><input type="file" accept=".csv" id="productMasterUpload"><div id="status-productMaster" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【必須】商品別売上データ (CSV)</label><input type="file" accept=".csv" id="productSalesUpload"><div id="status-productSales" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【任意】取引データ (CSV)</label><input type="file" accept=".csv" id="transactionUpload"><div id="status-transaction" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【任意】客層別売上 - 年代 (CSV)</label><input type="file" accept=".csv" id="ageUpload"><div id="status-age" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【任意】客層別売上 - 性別 (CSV)</label><input type="file" accept=".csv" id="genderUpload"><div id="status-gender" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【任意】客層別売上 - 来店回数 (CSV)</label><input type="file" accept=".csv" id="visitFrequencyUpload"><div id="status-visitFrequency" class="upload-status" style="display: none;"></div></div>
+                    <div class="upload-item"><label>【任意】客層別売上 - 来店目的 (CSV)</label><input type="file" accept=".csv" id="visitPurposeUpload"><div id="status-visitPurpose" class="upload-status" style="display: none;"></div></div>
                 </div>
                 
                 <h3>📦 コンポーネント</h3>
@@ -272,6 +285,7 @@
     <script>
         // グローバル変数
         var csvData = {};
+        var productMasterData = new Map(); // 商品マスタ（単価情報）を保持
         var componentCounter = 0;
         var draggedElement = null;
         window.imageData = {};
@@ -280,6 +294,7 @@
         // ファイルアップロード処理のセットアップ
         function setupFileUploads() {
             var fileInputs = [
+                {id: 'productMasterUpload', type: 'productMaster'},
                 {id: 'productSalesUpload', type: 'productSales'},
                 {id: 'transactionUpload', type: 'transaction'},
                 {id: 'ageUpload', type: 'age'},
@@ -308,21 +323,65 @@
             var reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    var data = e.target.result.split(/\r?\n/).map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))).filter(row => row.length > 0 && row.some(cell => cell));
+                    const data = e.target.result.split(/\r?\n/).map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))).filter(row => row.length > 1 && row.some(cell => cell));
                     if (data.length === 0) throw new Error('データが空です');
                     
-                    csvData[dataType] = data;
-                    statusDiv.innerHTML = `✅ ${file.name} (${data.length - 1}行) 読み込み完了`;
-                    statusDiv.className = 'upload-status upload-success';
-                    showToast(`${file.name} を読み込みました`);
+                    const headers = data[0];
+                    if (dataType === 'productMaster') {
+                        productMasterData.clear();
+                        const findIndex = (possibleNames) => {
+                            for (const name of possibleNames) {
+                                const index = headers.indexOf(name);
+                                if (index !== -1) return index;
+                            }
+                            return -1;
+                        };
+                        const idx = {
+                            code: findIndex(['商品コード', '品番']),
+                            name: findIndex(['商品名']),
+                            price: findIndex(['販売価格', '単価', '商品単価']),
+                            group: findIndex(['グループコード', 'グループ', 'メーカー', '社名'])
+                        };
+
+                        if ([idx.code, idx.name, idx.price, idx.group].some(i => i === -1)) {
+                             const missing = [];
+                             if (idx.code === -1) missing.push("商品コード");
+                             if (idx.name === -1) missing.push("商品名");
+                             if (idx.price === -1) missing.push("販売価格/商品単価");
+                             if (idx.group === -1) missing.push("グループコード/グループ");
+                            throw new Error(`商品マスタCSVに必須の列（${missing.join(', ')}）が見つかりません。`);
+                        }
+
+                        data.slice(1).forEach(row => {
+                            const productCode = row[idx.code];
+                            const unitPrice = parseFloat(row[idx.price]);
+                            if (productCode && !isNaN(unitPrice)) {
+                                productMasterData.set(productCode, {
+                                    name: row[idx.name],
+                                    price: unitPrice,
+                                    group: row[idx.group] || '',
+                                    dept: '' 
+                                });
+                            }
+                        });
+                        statusDiv.innerHTML = `✅ ${file.name} (${productMasterData.size}件) 読み込み完了`;
+                        showToast(`商品マスタを読み込みました (${productMasterData.size}件)`);
+
+                    } else {
+                        csvData[dataType] = data;
+                        statusDiv.innerHTML = `✅ ${file.name} (${data.length - 1}行) 読み込み完了`;
+                        showToast(`${file.name} を読み込みました`);
+                    }
+                    
                     setTimeout(() => updateRelatedComponents(dataType), 100);
+
                 } catch (error) {
                     statusDiv.innerHTML = `❌ エラー: ${error.message}`;
-                    showToast('ファイル読み込みエラー', 'error');
+                    showToast(error.message, 'error');
                 }
             };
             reader.onerror = () => { statusDiv.innerHTML = '❌ ファイル読み込みエラー'; showToast('ファイル読み込みエラー', 'error'); };
-            reader.readAsText(file);
+            reader.readAsText(file, 'Shift_JIS'); 
         }
         
         // データ更新時に関連コンポーネントを更新
@@ -333,7 +392,7 @@
                     const chartTypeSelect = document.getElementById('chartType_' + componentId);
                     if (chartTypeSelect && chartTypeSelect.value === dataType) { updateChart(componentId); }
                 });
-            } else if (dataType === 'productSales') {
+            } else if (dataType === 'productSales' || dataType === 'productMaster') {
                 populateMakerOptions();
             }
         }
@@ -425,64 +484,54 @@
                             <button class="btn btn-secondary" onclick="addReviewItem(${id})" style="margin-top: 10px;">＋ 項目を追加</button>`;
                 case 'product-table':
                     return `<div class="form-group"><label>対象メーカー選択</label><select id="makerSelect_${id}" onchange="updateProductTable(${id})"><option value="">メーカーを選択してください</option></select></div>
-                           <div id="table_${id}"><div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>◆ 商品別売上表</h4><p>商品別売上データをアップロードし、メーカーを選択してください</p></div></div>`;
-                case 'demographics-chart':
-                    return `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})">
-                           <option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div>
-                           <div class="chart-container" id="chart_${id}">${generateChart('age')}</div>
-                           <div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..."></textarea></div>`;
-                case 'image':
-                    return `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}"></div>
-                           <div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div>
-                           <div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div>
-                           <div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`;
-                case 'customer-voice':
-                    return `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;"></textarea></div>`;
-                case 'staff-comments':
-                    return `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;"></textarea></div>`;
-                case 'text-block':
-                    return `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})"></div>
-                            <div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div>
-                            <div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})"></textarea></div>
-                            <div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div>
-                            <div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`;
-                default: return '<p>不明なコンポーネントです。</p>';
+                           <div id="table_${id}"><div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>◆ 商品別売上表</h4><p>商品マスタと商品別売上データをアップロードし、メーカーを選択してください</p></div></div>
+                           <div class="add-product-area" id="addProductArea_${id}" style="display:none;">
+                                <label>レジミスなどで計上されなかった商品を手動で追加</label>
+                                <div style="display:flex; gap:10px;">
+                                    <select id="addProductSelect_${id}" style="flex:1;"></select>
+                                    <button class="btn btn-secondary" onclick="addProductFromMaster(${id})">商品を追加</button>
+                                </div>
+                           </div>`;
+                default:
+                    return getComponentContentFallback(type, id);
             }
         }
         
-        // MD全体の振り返り：項目追加
+        function getComponentContentFallback(type, id) {
+            const contents = {
+                'demographics-chart': `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})"><option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div><div class="chart-container" id="chart_${id}"></div><div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..."></textarea></div>`,
+                'image': `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}"></div><div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div><div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div><div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`,
+                'customer-voice': `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;"></textarea></div>`,
+                'staff-comments': `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;"></textarea></div>`,
+                'text-block': `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})"></div><div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div><div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})"></textarea></div><div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div><div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`
+            };
+            return contents[type] || '';
+        }
+
         function addReviewItem(componentId) {
             const container = document.getElementById(`review-items-container-${componentId}`);
             const newItem = document.createElement('div');
             newItem.className = 'review-item';
-            newItem.innerHTML = `
-                <div class="form-group">
-                    <label>見出し</label>
-                    <input type="text" class="review-item-title" placeholder="振り返りの見出し...">
-                </div>
-                <div class="form-group">
-                    <label>内容</label>
-                    <textarea class="review-item-content" rows="4" placeholder="具体的な内容..."></textarea>
-                </div>
-                <button class="btn btn-secondary" style="background: #e74c3c; font-size: 0.8em; padding: 5px 10px;" onclick="this.parentElement.remove()">この項目を削除</button>
-            `;
+            newItem.innerHTML = `<div class="form-group"><label>見出し</label><input type="text" class="review-item-title" placeholder="振り返りの見出し..."></div><div class="form-group"><label>内容</label><textarea class="review-item-content" rows="4" placeholder="具体的な内容..."></textarea></div><button class="btn btn-secondary" style="background: #e74c3c; font-size: 0.8em; padding: 5px 10px;" onclick="this.parentElement.remove()">この項目を削除</button>`;
             container.appendChild(newItem);
         }
 
         // メーカー選択肢を生成
         function populateMakerOptions() {
             if (!csvData.productSales || csvData.productSales.length < 2) return;
+            const headers = csvData.productSales[0];
+            const makerIndex = headers.indexOf('グループコード');
+            if (makerIndex === -1) { showToast('売上CSVに「グループコード」列がありません。', 'error'); return; }
+
             const makers = new Set();
             csvData.productSales.slice(1).forEach(row => {
-                const makerName = row[2]?.trim();
-                if (!makerName) return;
-                const match = makerName.match(/^【.*?】/);
-                if (match) {
-                    makers.add(match[0]);
-                } else {
-                    makers.add(makerName); 
-                }
+                const makerName = row[makerIndex]?.trim();
+                if (makerName) makers.add(makerName);
             });
+            productMasterData.forEach(prod => {
+                if (prod.group) makers.add(prod.group);
+            });
+
 
             document.querySelectorAll('select[id^="makerSelect_"]').forEach(select => {
                 const currentValue = select.value;
@@ -498,94 +547,163 @@
         function updateProductTable(componentId) {
             const select = document.getElementById('makerSelect_' + componentId);
             const tableDiv = document.getElementById('table_' + componentId);
+            const addProductDiv = document.getElementById('addProductArea_' + componentId);
             const selectedMaker = select?.value;
 
-            if (!csvData.productSales) { tableDiv.innerHTML = `<div class="message error">商品別売上データをアップロードしてください</div>`; return; }
-            if (!selectedMaker) { tableDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>◆ 商品別売上表</h4><p>上のプルダウンからメーカーを選択してください</p></div>`; return; }
+            if (!csvData.productSales) { tableDiv.innerHTML = `<p class="message error">商品別売上データをアップロードしてください</p>`; addProductDiv.style.display = 'none'; return; }
+            if (productMasterData.size === 0) { tableDiv.innerHTML = `<p class="message error">商品マスタデータをアップロードしてください</p>`; addProductDiv.style.display = 'none'; return; }
+            if (!selectedMaker) { tableDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>◆ 商品別売上表</h4><p>上のプルダウンからメーカーを選択してください</p></div>`; addProductDiv.style.display = 'none'; return; }
             
             try {
                 const data = csvData.productSales;
                 const headers = data[0];
-                const filteredRows = data.slice(1).filter(row => {
-                    const isMakerMatch = row[2]?.trim().startsWith(selectedMaker);
-                    const salesQty = parseInt(row[7], 10);
-                    return isMakerMatch && (isNaN(salesQty) || salesQty !== 0);
-                });
+                const idx = { code: headers.indexOf('商品コード'), name: headers.indexOf('商品名'), maker: headers.indexOf('グループコード'), dept: headers.indexOf('部門名'), sales: headers.indexOf('純売上'), netSales: headers.indexOf('純売上(税抜)'), ratio: headers.indexOf('純売上構成比'), qty: headers.indexOf('販売点数') };
+                if ([idx.code, idx.maker, idx.qty, idx.netSales].includes(-1)) { throw new Error('商品別売上CSVの列名（商品コード, グループコード, 販売点数, 純売上(税抜)）が正しくありません。'); }
 
-                if (filteredRows.length === 0) { tableDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>データがありません</h4><p>「${selectedMaker}」で始まる商品のうち、販売点数が1以上のデータはありませんでした。</p></div>`; return; }
+                const filteredRows = data.slice(1).filter(row => row[idx.maker]?.trim() === selectedMaker && (parseInt(row[idx.qty], 10) || 0) > 0);
                 
-                filteredRows.sort((a, b) => (parseFloat(b[5]?.replace(/[^0-9.-]/g, '')) || 0) - (parseFloat(a[5]?.replace(/[^0-9.-]/g, '')) || 0));
-
-                // 【変更点】実販売点数(8)を非表示に追加
-                const skipColumns = [0, 8, 9, 10];
-                const editableColumns = [1, 5, 7];
-
+                const displayHeaders = ['商品名', 'グループコード', '部門名', '純売上', '純売上(税抜)', '純売上構成比', '販売点数'];
                 let tableHTML = '<table class="data-table"><thead><tr>';
-                headers.forEach((h, i) => { if (!skipColumns.includes(i)) tableHTML += `<th>${h}</th>`; });
-                tableHTML += `<th>操作</th></tr></thead><tbody>`;
+                displayHeaders.forEach(h => { tableHTML += `<th>${h}</th>`; });
+                tableHTML += `<th>商品を削除</th></tr></thead><tbody>`;
                 
                 filteredRows.forEach((row) => {
-                    tableHTML += '<tr>';
-                    row.forEach((cell, i) => { 
-                        if (skipColumns.includes(i)) return;
-
-                        let handler = `oninput="recalculateProductTableTotals(${componentId})"`;
-                        if (i === 7) {
-                            handler = `onchange="handleQtyChange(this, ${componentId})"`;
-                        }
-
-                        if (editableColumns.includes(i)) {
-                            tableHTML += `<td><input type="text" class="editable-cell" value="${cell || ''}" ${handler}></td>`;
-                        } else {
-                            tableHTML += `<td>${cell || ''}</td>`;
-                         }
-                    });
-                    tableHTML += `<td><button class="delete-row-btn" title="この行を削除" onclick="this.closest('tr').remove(); recalculateProductTableTotals(${componentId})">🗑️</button></td>`;
-                    tableHTML += '</tr>';
+                    tableHTML += createTableRow(row[idx.code], row, idx, componentId);
                 });
                 
-                // 【変更点】合計行の不要なセルを削除
-                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="4">【合計】</td><td data-total="sales"></td><td>-</td><td data-total="qty"></td><td></td></tr>`;
+                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="3">【合計】</td><td data-total="sales"></td><td data-total="netSales"></td><td>-</td><td data-total="qty"></td><td></td></tr>`;
                 tableHTML += '</tbody></table>';
                 tableDiv.innerHTML = tableHTML;
-                recalculateProductTableTotals(componentId);
 
-            } catch (e) { tableDiv.innerHTML = `<div class="message error">エラー: ${e.message}</div>`; }
+                addProductDiv.style.display = 'block';
+                populateAddProductDropdown(componentId, selectedMaker);
+                recalculateAllSalesData(componentId);
+
+            } catch (e) { tableDiv.innerHTML = `<p class="message error">エラー: ${e.message}</p>`; showToast(e.message, 'error'); }
         }
+
+        // 商品追加ドロップダウンを生成
+        function populateAddProductDropdown(componentId, selectedMaker) {
+            const select = document.getElementById(`addProductSelect_${componentId}`);
+            select.innerHTML = '<option value="">追加する商品を選択...</option>';
+            for (const [code, product] of productMasterData.entries()) {
+                if (product.group === selectedMaker) {
+                    select.add(new Option(product.name, code));
+                }
+            }
+        }
+        
+        // 商品マスタから商品を表に追加
+        function addProductFromMaster(componentId) {
+            const select = document.getElementById(`addProductSelect_${componentId}`);
+            const productCode = select.value;
+            if (!productCode) return;
+
+            const table = document.getElementById(`table_${componentId}`).querySelector('tbody');
+            // 既に追加されているかチェック
+            if (table.querySelector(`tr[data-product-code="${productCode}"]`)) {
+                showToast('この商品は既に追加されています。数量を編集してください。', 'error');
+                return;
+            }
+
+            const product = productMasterData.get(productCode);
+            const netSales = product.price * 1;
+            const sales = Math.floor(netSales * 1.1); // 仮税率10%
+
+            const headers = csvData.productSales[0];
+            const idx = { code: headers.indexOf('商品コード'), name: headers.indexOf('商品名'), maker: headers.indexOf('グループコード'), dept: headers.indexOf('部門名'), sales: headers.indexOf('純売上'), netSales: headers.indexOf('純売上(税抜)'), ratio: headers.indexOf('純売上構成比'), qty: headers.indexOf('販売点数') };
+
+            const mockRow = [];
+            mockRow[idx.code] = productCode;
+            mockRow[idx.name] = product.name;
+            mockRow[idx.maker] = product.group;
+            mockRow[idx.dept] = product.dept;
+            mockRow[idx.sales] = sales;
+            mockRow[idx.netSales] = netSales;
+            mockRow[idx.qty] = 1;
+
+
+            const newRowHTML = createTableRow(productCode, mockRow, idx, componentId);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = newRowHTML;
+            table.insertBefore(tempDiv.firstChild, table.querySelector('.totals-row'));
+            
+            recalculateAllSalesData(componentId);
+            select.value = ''; // プルダウンをリセット
+        }
+
+        // 共通のテーブル行生成ロジック
+        function createTableRow(productCode, rowData, idx, componentId) {
+            let rowHTML = `<tr data-product-code="${productCode}">`;
+            rowHTML += `<td>${rowData[idx.name] || ''}</td>`;
+            rowHTML += `<td>${rowData[idx.maker] || ''}</td>`;
+            rowHTML += `<td>${rowData[idx.dept] || ''}</td>`;
+            rowHTML += `<td><input type="text" class="editable-cell" value="${rowData[idx.sales] || ''}" readonly></td>`;
+            rowHTML += `<td><input type="text" class="editable-cell" value="${rowData[idx.netSales] || ''}" readonly></td>`;
+            rowHTML += `<td data-role="ratio">${rowData[idx.ratio] || '0.00'}</td>`;
+            rowHTML += `<td><input type="text" class="editable-cell" value="${rowData[idx.qty] || ''}" onchange="handleQtyChange(this, ${componentId})"></td>`;
+            rowHTML += `<td><button class="delete-row-btn" title="この行を削除" onclick="this.closest('tr').remove(); recalculateAllSalesData(${componentId})">🗑️</button></td>`;
+            rowHTML += '</tr>';
+            return rowHTML;
+        }
+
 
         // 販売点数の変更を処理する関数
-        function handleQtyChange(inputElement, componentId) {
-            if (inputElement.value.trim() === '0') {
-                inputElement.closest('tr').remove();
+        function handleQtyChange(qtyInput, componentId) {
+            const row = qtyInput.closest('tr');
+            const productCode = row.dataset.productCode;
+            const newQty = parseInt(qtyInput.value, 10);
+
+            if (isNaN(newQty) || newQty <= 0) {
+                row.remove();
+            } else {
+                const unitPrice = productMasterData.get(productCode)?.price;
+                if (typeof unitPrice !== 'number') {
+                    showToast(`エラー: 商品コード「${productCode}」の単価がマスタにありません。売上は更新されません。`, 'error');
+                } else {
+                    const salesCell = row.cells[3].querySelector('input');
+                    const netSalesCell = row.cells[4].querySelector('input');
+                    const newNetSales = unitPrice * newQty;
+                    const newSales = Math.floor(newNetSales * 1.1); // 仮税率10%
+                    
+                    salesCell.value = newSales;
+                    netSalesCell.value = newNetSales;
+                }
             }
-            recalculateProductTableTotals(componentId);
+            recalculateAllSalesData(componentId);
         }
 
-        function recalculateProductTableTotals(componentId) {
+        // 売上関連の再計算をすべて行う関数
+        function recalculateAllSalesData(componentId) {
             const table = document.getElementById('table_' + componentId)?.querySelector('.data-table');
             if (!table) return;
 
-            let totalSales = 0;
-            let totalQty = 0;
+            let grandTotalSales = 0;
+            let grandTotalNetSales = 0;
+            let grandTotalQty = 0;
             
             const rows = table.querySelectorAll('tbody tr:not(.totals-row)');
+            
             rows.forEach(row => {
-                const salesInput = row.cells[4]?.querySelector('input');
-                const qtyInput = row.cells[6]?.querySelector('input');
-                
-                if (salesInput) {
-                    totalSales += parseFloat(salesInput.value.replace(/[^0-9.-]/g, '')) || 0;
-                }
-                if (qtyInput) {
-                    totalQty += parseInt(qtyInput.value, 10) || 0;
-                }
+                grandTotalNetSales += parseFloat(row.cells[4].querySelector('input').value) || 0;
+            });
+
+            rows.forEach(row => {
+                const netSales = parseFloat(row.cells[4].querySelector('input').value) || 0;
+                const ratioCell = row.cells[5];
+                const ratio = (grandTotalNetSales > 0) ? ((netSales / grandTotalNetSales) * 100).toFixed(2) : "0.00";
+                ratioCell.textContent = ratio;
+
+                grandTotalQty += parseInt(row.cells[6].querySelector('input').value, 10) || 0;
+                grandTotalSales += parseFloat(row.cells[3].querySelector('input').value) || 0;
             });
             
-            const totalSalesCell = table.querySelector('.totals-row td[data-total="sales"]');
-            const totalQtyCell = table.querySelector('.totals-row td[data-total="qty"]');
-
-            if(totalSalesCell) totalSalesCell.textContent = `¥${totalSales.toLocaleString()}`;
-            if(totalQtyCell) totalQtyCell.textContent = `${totalQty.toLocaleString()}点`;
+            const totalsRow = table.querySelector('.totals-row');
+            if (totalsRow) {
+                totalsRow.querySelector('[data-total="sales"]').textContent = `¥${grandTotalSales.toLocaleString()}`;
+                totalsRow.querySelector('[data-total="netSales"]').textContent = `¥${grandTotalNetSales.toLocaleString()}`;
+                totalsRow.querySelector('[data-total="qty"]').textContent = `${grandTotalQty.toLocaleString()}点`;
+            }
         }
         
         // --- 以下の関数は変更ありません ---
