@@ -494,7 +494,7 @@
             if (makers.size > 0) showToast(`${makers.size}個のメーカー/ブランドを検出しました`);
         }
         
-        // 【最終修正】商品売上表の更新ロジック
+        // 商品売上表の更新
         function updateProductTable(componentId) {
             const select = document.getElementById('makerSelect_' + componentId);
             const tableDiv = document.getElementById('table_' + componentId);
@@ -506,7 +506,6 @@
             try {
                 const data = csvData.productSales;
                 const headers = data[0];
-                // 読み込み時に販売点数(row[7])が0でない行のみフィルタリング (より堅牢な数値変換)
                 const filteredRows = data.slice(1).filter(row => {
                     const isMakerMatch = row[2]?.trim().startsWith(selectedMaker);
                     const salesQty = parseInt(row[7], 10);
@@ -517,7 +516,8 @@
                 
                 filteredRows.sort((a, b) => (parseFloat(b[5]?.replace(/[^0-9.-]/g, '')) || 0) - (parseFloat(a[5]?.replace(/[^0-9.-]/g, '')) || 0));
 
-                const skipColumns = [0, 9, 10];
+                // 【変更点】実販売点数(8)を非表示に追加
+                const skipColumns = [0, 8, 9, 10];
                 const editableColumns = [1, 5, 7];
 
                 let tableHTML = '<table class="data-table"><thead><tr>';
@@ -530,7 +530,6 @@
                         if (skipColumns.includes(i)) return;
 
                         let handler = `oninput="recalculateProductTableTotals(${componentId})"`;
-                        // 販売点数(列インデックス7)の場合、onchangeイベントに変更
                         if (i === 7) {
                             handler = `onchange="handleQtyChange(this, ${componentId})"`;
                         }
@@ -541,12 +540,12 @@
                             tableHTML += `<td>${cell || ''}</td>`;
                          }
                     });
-                    // ゴミ箱アイコンによる削除ボタン
                     tableHTML += `<td><button class="delete-row-btn" title="この行を削除" onclick="this.closest('tr').remove(); recalculateProductTableTotals(${componentId})">🗑️</button></td>`;
                     tableHTML += '</tr>';
                 });
                 
-                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="4">【合計】</td><td data-total="sales"></td><td>-</td><td data-total="qty"></td><td>-</td><td></td></tr>`;
+                // 【変更点】合計行の不要なセルを削除
+                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="4">【合計】</td><td data-total="sales"></td><td>-</td><td data-total="qty"></td><td></td></tr>`;
                 tableHTML += '</tbody></table>';
                 tableDiv.innerHTML = tableHTML;
                 recalculateProductTableTotals(componentId);
@@ -554,13 +553,11 @@
             } catch (e) { tableDiv.innerHTML = `<div class="message error">エラー: ${e.message}</div>`; }
         }
 
-        // 【最終修正】販売点数の変更を処理する関数
+        // 販売点数の変更を処理する関数
         function handleQtyChange(inputElement, componentId) {
-            // 入力値が「0」になったら、その行を削除する
             if (inputElement.value.trim() === '0') {
                 inputElement.closest('tr').remove();
             }
-            // 変更が確定したら、合計を再計算する
             recalculateProductTableTotals(componentId);
         }
 
