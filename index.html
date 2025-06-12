@@ -196,6 +196,17 @@
             background-color: #fff8f5;
         }
 
+        .delete-row-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 5px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .delete-row-btn:hover { opacity: 1; color: #e74c3c; }
+
 
         /* --- トースト通知 --- */
         .toast {
@@ -461,7 +472,18 @@
         // メーカー選択肢を生成
         function populateMakerOptions() {
             if (!csvData.productSales || csvData.productSales.length < 2) return;
-            const makers = new Set(csvData.productSales.slice(1).map(row => row[2]?.trim()).filter(Boolean));
+            const makers = new Set();
+            csvData.productSales.slice(1).forEach(row => {
+                const makerName = row[2]?.trim();
+                if (!makerName) return;
+                const match = makerName.match(/^【.*?】/);
+                if (match) {
+                    makers.add(match[0]);
+                } else {
+                    makers.add(makerName); 
+                }
+            });
+
             document.querySelectorAll('select[id^="makerSelect_"]').forEach(select => {
                 const currentValue = select.value;
                 select.innerHTML = '<option value="">メーカーを選択してください</option>';
@@ -469,49 +491,62 @@
                     select.add(new Option(maker, maker, false, maker === currentValue));
                 });
             });
-            if (makers.size > 0) showToast(`${makers.size}社のメーカーを検出しました`);
+            if (makers.size > 0) showToast(`${makers.size}個のメーカー/ブランドを検出しました`);
         }
         
-        // 商品売上表を更新
+        // 【最終修正】商品売上表の更新ロジック
         function updateProductTable(componentId) {
             const select = document.getElementById('makerSelect_' + componentId);
             const tableDiv = document.getElementById('table_' + componentId);
             const selectedMaker = select?.value;
 
             if (!csvData.productSales) { tableDiv.innerHTML = `<div class="message error">商品別売上データをアップロードしてください</div>`; return; }
-            if (!selectedMaker) { tableDiv.innerHTML = `<div class="message info">上のプルダウンからメーカーを選択してください</div>`; return; }
+            if (!selectedMaker) { tableDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>◆ 商品別売上表</h4><p>上のプルダウンからメーカーを選択してください</p></div>`; return; }
             
             try {
                 const data = csvData.productSales;
                 const headers = data[0];
-                const filteredRows = data.slice(1).filter(row => row[2]?.trim() === selectedMaker);
+                // 読み込み時に販売点数(row[7])が0でない行のみフィルタリング (より堅牢な数値変換)
+                const filteredRows = data.slice(1).filter(row => {
+                    const isMakerMatch = row[2]?.trim().startsWith(selectedMaker);
+                    const salesQty = parseInt(row[7], 10);
+                    return isMakerMatch && (isNaN(salesQty) || salesQty !== 0);
+                });
 
-                if (filteredRows.length === 0) { tableDiv.innerHTML = `<div class="message error">「${selectedMaker}」の商品データが見つかりません</div>`; return; }
+                if (filteredRows.length === 0) { tableDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; border: 2px dashed #ddd; border-radius: 8px;"><h4>データがありません</h4><p>「${selectedMaker}」で始まる商品のうち、販売点数が1以上のデータはありませんでした。</p></div>`; return; }
                 
                 filteredRows.sort((a, b) => (parseFloat(b[5]?.replace(/[^0-9.-]/g, '')) || 0) - (parseFloat(a[5]?.replace(/[^0-9.-]/g, '')) || 0));
 
-                const skipColumns = [0, 9, 10]; // 表示しない列
-                const editableColumns = [5, 7]; // 純売上(税抜), 販売点数
+                const skipColumns = [0, 9, 10];
+                const editableColumns = [1, 5, 7];
 
                 let tableHTML = '<table class="data-table"><thead><tr>';
                 headers.forEach((h, i) => { if (!skipColumns.includes(i)) tableHTML += `<th>${h}</th>`; });
-                tableHTML += '</tr></thead><tbody>';
+                tableHTML += `<th>操作</th></tr></thead><tbody>`;
                 
-                filteredRows.forEach((row, rowIndex) => {
+                filteredRows.forEach((row) => {
                     tableHTML += '<tr>';
                     row.forEach((cell, i) => { 
-                        if (!skipColumns.includes(i)) {
-                            if (editableColumns.includes(i)) {
-                                tableHTML += `<td><input type="text" class="editable-cell" value="${cell || ''}" oninput="recalculateProductTableTotals(${componentId})"></td>`;
-                            } else {
-                                tableHTML += `<td>${cell || ''}</td>`;
-                             }
+                        if (skipColumns.includes(i)) return;
+
+                        let handler = `oninput="recalculateProductTableTotals(${componentId})"`;
+                        // 販売点数(列インデックス7)の場合、onchangeイベントに変更
+                        if (i === 7) {
+                            handler = `onchange="handleQtyChange(this, ${componentId})"`;
                         }
+
+                        if (editableColumns.includes(i)) {
+                            tableHTML += `<td><input type="text" class="editable-cell" value="${cell || ''}" ${handler}></td>`;
+                        } else {
+                            tableHTML += `<td>${cell || ''}</td>`;
+                         }
                     });
+                    // ゴミ箱アイコンによる削除ボタン
+                    tableHTML += `<td><button class="delete-row-btn" title="この行を削除" onclick="this.closest('tr').remove(); recalculateProductTableTotals(${componentId})">🗑️</button></td>`;
                     tableHTML += '</tr>';
                 });
                 
-                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="4">【合計】</td><td data-total="sales"></td><td>-</td><td data-total="qty"></td><td>-</td></tr>`;
+                tableHTML += `<tr class="totals-row" style="background:#efefef;font-weight:bold;"><td colspan="4">【合計】</td><td data-total="sales"></td><td>-</td><td data-total="qty"></td><td>-</td><td></td></tr>`;
                 tableHTML += '</tbody></table>';
                 tableDiv.innerHTML = tableHTML;
                 recalculateProductTableTotals(componentId);
@@ -519,8 +554,18 @@
             } catch (e) { tableDiv.innerHTML = `<div class="message error">エラー: ${e.message}</div>`; }
         }
 
+        // 【最終修正】販売点数の変更を処理する関数
+        function handleQtyChange(inputElement, componentId) {
+            // 入力値が「0」になったら、その行を削除する
+            if (inputElement.value.trim() === '0') {
+                inputElement.closest('tr').remove();
+            }
+            // 変更が確定したら、合計を再計算する
+            recalculateProductTableTotals(componentId);
+        }
+
         function recalculateProductTableTotals(componentId) {
-            const table = document.getElementById('table_' + componentId).querySelector('.data-table');
+            const table = document.getElementById('table_' + componentId)?.querySelector('.data-table');
             if (!table) return;
 
             let totalSales = 0;
@@ -528,25 +573,28 @@
             
             const rows = table.querySelectorAll('tbody tr:not(.totals-row)');
             rows.forEach(row => {
-                const salesInput = row.cells[4].querySelector('input'); // 純売上(税抜)
-                const qtyInput = row.cells[6].querySelector('input'); // 販売点数
+                const salesInput = row.cells[4]?.querySelector('input');
+                const qtyInput = row.cells[6]?.querySelector('input');
                 
-                totalSales += parseFloat(salesInput.value.replace(/[^0-9.-]/g, '')) || 0;
-                totalQty += parseInt(qtyInput.value, 10) || 0;
+                if (salesInput) {
+                    totalSales += parseFloat(salesInput.value.replace(/[^0-9.-]/g, '')) || 0;
+                }
+                if (qtyInput) {
+                    totalQty += parseInt(qtyInput.value, 10) || 0;
+                }
             });
             
             const totalSalesCell = table.querySelector('.totals-row td[data-total="sales"]');
             const totalQtyCell = table.querySelector('.totals-row td[data-total="qty"]');
 
-            totalSalesCell.textContent = `¥${totalSales.toLocaleString()}`;
-            totalQtyCell.textContent = `${totalQty.toLocaleString()}点`;
+            if(totalSalesCell) totalSalesCell.textContent = `¥${totalSales.toLocaleString()}`;
+            if(totalQtyCell) totalQtyCell.textContent = `${totalQty.toLocaleString()}点`;
         }
         
-        // チャート生成
+        // --- 以下の関数は変更ありません ---
         function generateChart(chartType) {
             const data = csvData[chartType];
             if (!data || data.length < 2) return `<div><p>データを入力してください</p></div>`;
-
             const headers = data[0].map(h => h.toLowerCase());
             const items = [];
             let total = 0;
@@ -555,9 +603,7 @@
                 const value = parseInt(row[9]?.replace(/,/g, ''), 10) || 0;
                 if (label && value > 0) { items.push({ label, value }); total += value; }
             });
-
             if (items.length === 0) return `<div><p>有効なデータがありません</p></div>`;
-
             const colors = ['#dc3912', '#ff9900', '#109618', '#990099', '#0099c6', '#dd4477', '#66aa00', '#b82e2e'];
             let chartHtml = `<div style="display: flex; align-items: flex-start; gap: 20px; margin-top: 20px;">`;
             let svgPaths = '';
@@ -570,7 +616,6 @@
                 svgPaths += `<path d="M 150 150 L ${x1} ${y1} A 120 120 0 ${angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z" fill="${colors[i % colors.length]}"></path>`;
             });
             chartHtml += `<div style="flex-shrink: 0;"><svg width="300" height="300" viewBox="0 0 300 300">${svgPaths}</svg></div>`;
-            
             let legendHtml = '<div style="flex: 1;">';
             items.forEach((item, i) => {
                 legendHtml += `<div style="display: flex; align-items: center; margin-bottom: 8px; text-align: left;">
@@ -581,256 +626,88 @@
             chartHtml += legendHtml + '</div></div></div>';
             return chartHtml;
         }
-
         function updateChart(componentId) { document.getElementById('chart_' + componentId).innerHTML = generateChart(document.getElementById('chartType_' + componentId).value); }
-        
-        // --- 画像関連の関数 ---
         function createImageUploadInputs(id, count) { let h = ''; for (let i = 1; i <= count; i++) { h += `<div class="form-group" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;"><label>画像ファイル ${i}</label><input type="file" accept="image/*" id="imageFile${i}_${id}" onchange="handleMultiImageUpload(${id}, ${i})"><label style="margin-top:10px;">画像 ${i} の説明文</label><textarea rows="2" id="imageCaption${i}_${id}" placeholder="この画像の説明..." oninput="updateImageDisplay(${id})"></textarea></div>`; } return h; }
         function updateImageLayout(id) { const l = document.getElementById('imageLayout_' + id).value; document.getElementById('imageUploadArea_' + id).innerHTML = createImageUploadInputs(id, l === 'single' ? 1 : l === 'two' ? 2 : 3); updateImageDisplay(id); }
         function handleMultiImageUpload(id, idx) { const f = document.getElementById(`imageFile${idx}_${id}`); if (!f.files[0]) return; const r = new FileReader(); r.onload = e => { if (!window.imageData[id]) window.imageData[id] = {}; window.imageData[id][idx] = e.target.result; updateImageDisplay(id); }; r.readAsDataURL(f.files[0]); }
         function updateImageDisplay(id) { const p = document.getElementById('imagePreview_' + id); const d = window.imageData[id] || {}; if (Object.keys(d).length === 0) { p.innerHTML = '<p>画像をアップロードしてください</p>'; return; } let h = '<div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">'; Object.keys(d).sort().forEach(idx => { const cap = document.getElementById(`imageCaption${idx}_${id}`)?.value.replace(/\n/g, '<br>') || ''; h += `<div style="flex: 1; min-width: 200px; max-width: 300px; text-align: center;"><img src="${d[idx]}" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"><p style="font-size: 0.9em; color: #666; margin-top: 8px; text-align: left;">${cap}</p></div>`; }); p.innerHTML = h + '</div>'; }
-
-        // --- 自由テキスト関連 ---
         function updateTextLayout(id) { document.getElementById(`textImageOptions_${id}`).style.display = document.getElementById(`textLayout_${id}`).value === 'text-only' ? 'none' : 'block'; updateTextBlockDisplay(id); }
         function handleTextBlockImageUpload(id) { const f = document.getElementById(`textImageFile_${id}`); if (!f.files[0]) return; const r = new FileReader(); r.onload = e => { window.textImageData[id] = e.target.result; updateTextBlockDisplay(id); }; r.readAsDataURL(f.files[0]); }
         function updateTextBlockDisplay(id) { const p = document.getElementById(`textPreview_${id}`); const l = document.getElementById(`textLayout_${id}`).value; const c = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); if (l === 'text-only') { p.innerHTML = c; return; } const iS = document.getElementById(`textImageSize_${id}`).value; const iD = window.textImageData[id]; let iH = iD ? `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0;"><img src="${iD}" style="width: 100%; border-radius: 8px;"></div>` : `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0; border: 2px dashed #ccc; display:flex; align-items:center; justify-content:center; min-height:100px; color:#999;">画像</div>`; const tH = `<div class="text-part" style="flex: 1;">${c}</div>`; p.innerHTML = `<div style="display: flex; gap: 20px; align-items: flex-start; flex-direction: ${l === 'text-image-right' ? 'row' : 'row-reverse'};">${l === 'text-image-right' ? tH + iH : iH + tH}</div>`; }
-        
-        // --- その他UI操作 ---
         function loadSalesData(id) { const d = csvData.transaction; if (!d || d.length < 2) { showToast('取引データが未入力です', 'error'); return; } try { const r = d.slice(1); const s = r.reduce((sum, row) => sum + (parseFloat(row[2]) || 0), 0); const c = new Set(r.map(row => row[0]).filter(Boolean)).size; document.getElementById('sales_' + id).value = `¥${s.toLocaleString()}`; document.getElementById('customers_' + id).value = c; document.getElementById('avgprice_' + id).value = `¥${(c > 0 ? Math.floor(s / c) : 0).toLocaleString()}`; showToast('売上情報を自動計算しました'); } catch (e) { showToast(`計算エラー: ${e.message}`, 'error'); } }
         function moveUp(btn) { const c = btn.closest('.report-component'); if (c.previousElementSibling) c.parentNode.insertBefore(c, c.previousElementSibling); }
         function moveDown(btn) { const c = btn.closest('.report-component'); if (c.nextElementSibling) c.parentNode.insertBefore(c.nextElementSibling, c); }
         function deleteComponent(btn) { const c = btn.closest('.report-component'); if (confirm(`「${c.querySelector('h4').textContent}」を削除しますか？`)) { c.remove(); if (document.getElementById('dropZone').children.length === 0) { document.getElementById('dropZone').innerHTML = `<div class="drop-zone-placeholder"><i>📦</i><h3>コンポーネントを...</h3></div>`; } } }
         function clearCanvas() { if (confirm('すべてのコンポーネントを削除しますか？')) { document.getElementById('dropZone').innerHTML = `<div class="drop-zone-placeholder"><i>📦</i><h3>コンポーネントを...</h3></div>`; showToast('キャンバスをクリアしました'); } }
-        
-        // --- レポート生成・印刷 ---
         function previewReport() { if (document.querySelectorAll('.report-component').length === 0) { showToast('プレビュー対象がありません', 'error'); return; } const win = window.open('', '_blank'); win.document.write(generatePrintPreviewContent()); win.document.close(); }
         function printReport() { if (document.querySelectorAll('.report-component').length === 0) { showToast('印刷対象がありません', 'error'); return; } const win = window.open('', '_blank'); win.document.write(generatePrintPreviewContent()); win.document.close(); setTimeout(() => { win.print(); win.close(); }, 500); }
-
-        // レポートHTML生成（印刷・プレビュー用）
         function generatePrintPreviewContent() {
             let content = `<!DOCTYPE html><html lang="ja"><head><title>レポート</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
             <style>
-                /* --- 冊子風印刷スタイル --- */
-                body { 
-                    font-family: 'Noto Serif JP', serif; 
-                    line-height: 1.7; 
-                    background: white; color: #333; 
-                    counter-reset: section-counter;
-                }
-                @page { 
-                    size: A4 landscape;
-                    margin: 15mm; 
-                }
-                * {
-                    -webkit-print-color-adjust: exact !important;
-                    color-adjust: exact !important;
-                }
+                body { font-family: 'Noto Serif JP', serif; line-height: 1.7; background: white; color: #333; counter-reset: section-counter; }
+                @page { size: A4 landscape; margin: 15mm; }
+                * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
                 .report-container { width: 100%; margin: 0 auto; }
-
                 h1 { font-size: 24pt; text-align: center; color: #333; margin: 0; font-weight: 700;}
-
-                /* セクション見出し (01, 02...) */
-                h2 {
-                    font-family: 'Hiragino Sans', sans-serif;
-                    font-size: 16pt;
-                    font-weight: bold;
-                    color: #333;
-                    background-color: #efefef;
-                    padding: 8px;
-                    margin-top: 25px;
-                    margin-bottom: 20px;
-                    page-break-after: avoid;
-                    display: flex;
-                    align-items: center;
-                }
-                h2::before {
-                    counter-increment: section-counter;
-                    content: "0" counter(section-counter);
-                    background-color: #dc3912;
-                    color: white;
-                    padding: 8px 12px;
-                    margin-right: 15px;
-                    font-size: 1.2em;
-                    font-weight: bold;
-                }
-
+                h2 { font-family: 'Hiragino Sans', sans-serif; font-size: 16pt; font-weight: bold; color: #333; background-color: #efefef; padding: 8px; margin-top: 25px; margin-bottom: 20px; page-break-after: avoid; display: flex; align-items: center; }
+                h2::before { counter-increment: section-counter; content: "0" counter(section-counter); background-color: #dc3912; color: white; padding: 8px 12px; margin-right: 15px; font-size: 1.2em; font-weight: bold; }
                 h3 { font-size: 13pt; color: #333; border-bottom: 2px solid #efefef; padding-bottom: 5px; margin-top: 20px; margin-bottom: 10px; page-break-after: avoid; font-weight: 700; }
                 p { margin-bottom: 15px; font-size: 11pt; }
-                
                 .section { margin-bottom: 20px; page-break-inside: avoid; }
-                
                 .report-header { text-align: center; margin-bottom: 40px; page-break-after: avoid; }
                 .report-header p { font-size: 12pt; margin: 5px 0; }
                 .report-header .period { font-size: 11pt; color: #666; }
-
                 .sales-summary-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12pt; }
                 .sales-summary-table td { border: 1px solid #ddd; padding: 12px; text-align: center; width: 33.33%; background-color: #fafafa; }
                 .sales-summary-table td strong { color: #333; display: block; margin-bottom: 5px; font-size: 11pt; font-weight: bold; }
-                
                 .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 9pt; }
                 .data-table th, .data-table td { padding: 8px 10px; border: 1px solid #ccc; text-align: left; vertical-align: middle; }
                 .data-table th { background: #efefef; font-weight: bold; font-family: 'Hiragino Sans', sans-serif; }
                 .data-table tr[style*="font-weight:bold"] { background-color: #efefef !important; font-weight: bold; font-size: 10pt; }
-                
-                .demographics-container {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 20px;
-                    page-break-inside: avoid;
-                }
-                .chart-and-legend {
-                    display: flex;
-                    gap: 30px;
-                    align-items: center;
-                }
-                .chart-part {
-                    flex: 0 0 50%; /* 円グラフの領域を拡大 */
-                    text-align: center;
-                }
-                .chart-part svg {
-                    width: 100%;
-                    max-width: 400px; /* 円グラフの最大サイズを拡大 */
-                    height: auto;
-                }
-                .legend-part-wrapper {
-                    flex: 1;
-                }
-                .legend-part {
-                    column-count: 1;
-                }
+                .data-table .delete-row-btn { display: none; }
+                .demographics-container { display: flex; flex-direction: column; gap: 20px; page-break-inside: avoid; }
+                .chart-and-legend { display: flex; gap: 30px; align-items: center; }
+                .chart-part { flex: 0 0 50%; text-align: center; }
+                .chart-part svg { width: 100%; max-width: 400px; height: auto; }
+                .legend-part-wrapper { flex: 1; }
+                .legend-part { column-count: 1; }
                 .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 10pt; page-break-inside: avoid; }
                 .legend-color { width: 16px; height: 16px; margin-right: 10px; border-radius: 3px; flex-shrink: 0; }
                 .legend-label { margin-right: 10px; }
                 .legend-value { font-weight: bold; }
-                
-                .analysis-comment-wrapper {
-                     margin-top: 10px;
-                }
-
-                .text-content, .comment-part, .event-review-body { 
-                    white-space: pre-wrap; line-height: 1.8; font-size: 11pt; 
-                    background: #ffffff; 
-                    padding: 20px; 
-                    border-radius: 5px; 
-                    margin-top: 10px; 
-                    border: 1px solid #efefef;
-                }
-
+                .analysis-comment-wrapper { margin-top: 10px; }
+                .text-content, .comment-part, .event-review-body { white-space: pre-wrap; line-height: 1.8; font-size: 11pt; background: #ffffff; padding: 20px; border-radius: 5px; margin-top: 10px; border: 1px solid #efefef; }
                 .image-section { text-align: center; margin-top: 20px; }
                 .image-section .image-block { display: inline-block; margin: 10px; text-align: left; vertical-align: top; width: 30%; }
                 .image-section img { max-width: 100%; height: auto; border: 1px solid #ddd; padding: 4px; margin-bottom: 5px; }
                 .image-section p { font-size: 9pt; color: #555; text-align: center; }
-
                 .text-block-content .text-image-container { display:flex; gap: 20px; align-items: flex-start; }
                 .text-block-content .image-part { flex-shrink: 0; }
                 .text-block-content .image-part img { width: 100%; height: auto; border-radius: 8px; }
                 .text-block-content .text-part { flex: 1; }
-
             </style></head><body><div class="report-container">`;
-
             document.querySelectorAll('.report-component').forEach((component) => {
                 const {type, id} = component.dataset;
-                
                 try {
                     switch (type) {
-                        case 'header':
-                            content += `<div class="section"><div class="report-header"><h1>${document.getElementById(`event_${id}`).value}</h1><p>${document.getElementById(`company_${id}`).value} ${document.getElementById(`honorific_${id}`).value}</p><p class="period">${document.getElementById(`period_${id}`).value}</p></div></div>`;
-                            break;
-                        case 'sales-summary':
-                            content += `<div class="section"><h2>売上サマリー（MD全体の売上）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>購入客数</strong> ${document.getElementById(`customers_${id}`).value}人</td><td><strong>平均購入単価</strong> ${document.getElementById(`avgprice_${id}`).value}</td></tr></table></div>`;
-                            break;
-                        case 'event-review':
-                            content += `<div class="section page-break-before"><h2>MD全体の振り返り</h2>`;
-                            component.querySelectorAll('.review-item').forEach(item => {
-                                const title = item.querySelector('.review-item-title').value;
-                                const reviewContent = item.querySelector('.review-item-content').value.replace(/\n/g, '<br>');
-                                if (title || reviewContent) {
-                                    content += `<h3>${title}</h3><div class="event-review-body">${reviewContent}</div>`;
-                                }
-                            });
-                            content += `</div>`;
-                            break;
-                        case 'product-table':
-                            content += `<div class="section page-break-before"><h2>商品別売上表</h2>`;
-                            const tableNode = component.querySelector('.data-table');
-                            if (tableNode) {
-                                const clonedTable = tableNode.cloneNode(true);
-                                clonedTable.querySelectorAll('input.editable-cell').forEach(input => {
-                                    const text = document.createTextNode(input.value);
-                                    input.parentNode.replaceChild(text, input);
-                                });
-                                content += clonedTable.outerHTML;
-                            }
-                            content += `</div>`;
-                            break;
-                        case 'demographics-chart':
-                            content += `<div class="section page-break-before"><h2>客層分析 (${document.querySelector(`#chartType_${id} option:checked`).textContent})</h2>`;
-                            const chartContainer = document.getElementById(`chart_${id}`);
-                            if (chartContainer) {
-                                let legendHtml = '';
-                                chartContainer.querySelectorAll('div[style*="display: flex"] > div:last-child > div').forEach(item => {
-                                    const color = item.querySelector('div[style*="background-color"]').style.backgroundColor;
-                                    const label = item.querySelector('input[type="text"]').value;
-                                    const value = item.querySelector('span').textContent;
-                                    legendHtml += `<div class="legend-item"><div class="legend-color" style="background-color: ${color};"></div><span class="legend-label">${label}</span><span class="legend-value">${value}</span></div>`;
-                                });
-                                const commentText = document.getElementById(`comment_${id}`).value;
-
-                                content += `<div class="demographics-container">
-                                                <div class="chart-and-legend">
-                                                    <div class="chart-part">${chartContainer.querySelector('svg')?.outerHTML || ''}</div>
-                                                    <div class="legend-part-wrapper"><div class="legend-part">${legendHtml}</div></div>
-                                                </div>`;
-                                if (commentText.trim() !== '') {
-                                    content += `<div class="analysis-comment-wrapper">
-                                                    <h3>分析コメント</h3>
-                                                    <div class="comment-part">${commentText.replace(/\n/g, '<br>')}</div>
-                                                </div>`;
-                                }
-                                content += `</div>`; // close container
-                            }
-                            content += `</div>`;
-                            break;
-                        case 'image':
-                             content += `<div class="section page-break-before"><h2>${document.getElementById(`imageTitle_${id}`).value}</h2><div class="image-section">${document.getElementById(`imagePreview_${id}`).innerHTML.replace(/<div style="flex: 1[^>]+>/g, '<div class="image-block">')}</div></div>`;
-                            break;
-                        case 'customer-voice':
-                            content += `<div class="section page-break-before"><h2>お客様の声</h2><div class="text-content">${document.getElementById(`voice_${id}`).value.replace(/\n/g, '<br>')}</div></div>`;
-                            break;
-                        case 'staff-comments':
-                            content += `<div class="section page-break-before"><h2>スタッフ所感</h2><div class="text-content">${document.getElementById(`staff_${id}`).value.replace(/\n/g, '<br>')}</div></div>`;
-                            break;
-                        case 'text-block':
-                             const title = document.getElementById(`title_${id}`).value;
-                             const layout = document.getElementById(`textLayout_${id}`).value;
-                             const textContent = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>');
-                             const imageSrc = window.textImageData[id];
-
-                             content += `<div class="section page-break-before"><h2>${title}</h2>`;
-
-                             if (layout === 'text-only' || !imageSrc) {
-                                 content += `<div class="text-block-content">${textContent}</div>`;
-                             } else {
-                                 const imageSize = document.getElementById(`textImageSize_${id}`).value;
-                                 const textPart = `<div class="text-part">${textContent}</div>`;
-                                 const imagePart = `<div class="image-part" style="flex-basis: ${imageSize};"><img src="${imageSrc}"></div>`;
-                                 content += `<div class="text-block-content"><div class="text-image-container">
-                                                ${layout === 'text-image-left' ? imagePart + textPart : textPart + imagePart}
-                                            </div></div>`;
-                             }
-                             content += `</div>`;
-                             break;
+                        case 'header': content += `<div class="section"><div class="report-header"><h1>${document.getElementById(`event_${id}`).value}</h1><p>${document.getElementById(`company_${id}`).value} ${document.getElementById(`honorific_${id}`).value}</p><p class="period">${document.getElementById(`period_${id}`).value}</p></div></div>`; break;
+                        case 'sales-summary': content += `<div class="section"><h2>売上サマリー（MD全体の売上）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>購入客数</strong> ${document.getElementById(`customers_${id}`).value}人</td><td><strong>平均購入単価</strong> ${document.getElementById(`avgprice_${id}`).value}</td></tr></table></div>`; break;
+                        case 'event-review': content += `<div class="section page-break-before"><h2>MD全体の振り返り</h2>`; component.querySelectorAll('.review-item').forEach(item => { const title = item.querySelector('.review-item-title').value; const reviewContent = item.querySelector('.review-item-content').value.replace(/\n/g, '<br>'); if (title || reviewContent) { content += `<h3>${title}</h3><div class="event-review-body">${reviewContent}</div>`; } }); content += `</div>`; break;
+                        case 'product-table': content += `<div class="section page-break-before"><h2>商品別売上表</h2>`; const tableNode = component.querySelector('.data-table'); if (tableNode) { const clonedTable = tableNode.cloneNode(true); clonedTable.querySelectorAll('input.editable-cell').forEach(input => { const text = document.createTextNode(input.value); input.parentNode.replaceChild(text, input); }); clonedTable.querySelector('thead tr').lastChild.remove(); clonedTable.querySelectorAll('tbody tr').forEach(tr => { if(tr.lastChild) tr.lastChild.remove(); }); content += clonedTable.outerHTML; } content += `</div>`; break;
+                        case 'demographics-chart': content += `<div class="section page-break-before"><h2>客層分析 (${document.querySelector(`#chartType_${id} option:checked`).textContent})</h2>`; const chartContainer = document.getElementById(`chart_${id}`); if (chartContainer) { let legendHtml = ''; chartContainer.querySelectorAll('div[style*="display: flex"] > div:last-child > div').forEach(item => { const color = item.querySelector('div[style*="background-color"]').style.backgroundColor; const label = item.querySelector('input[type="text"]').value; const value = item.querySelector('span').textContent; legendHtml += `<div class="legend-item"><div class="legend-color" style="background-color: ${color};"></div><span class="legend-label">${label}</span><span class="legend-value">${value}</span></div>`; }); const commentText = document.getElementById(`comment_${id}`).value; content += `<div class="demographics-container"><div class="chart-and-legend"><div class="chart-part">${chartContainer.querySelector('svg')?.outerHTML || ''}</div><div class="legend-part-wrapper"><div class="legend-part">${legendHtml}</div></div>`; if (commentText.trim() !== '') { content += `<div class="analysis-comment-wrapper"><h3>分析コメント</h3><div class="comment-part">${commentText.replace(/\n/g, '<br>')}</div></div>`; } content += `</div>`; } content += `</div>`; break;
+                        case 'image': content += `<div class="section page-break-before"><h2>${document.getElementById(`imageTitle_${id}`).value}</h2><div class="image-section">${document.getElementById(`imagePreview_${id}`).innerHTML.replace(/<div style="flex: 1[^>]+>/g, '<div class="image-block">')}</div></div>`; break;
+                        case 'customer-voice': content += `<div class="section page-break-before"><h2>お客様の声</h2><div class="text-content">${document.getElementById(`voice_${id}`).value.replace(/\n/g, '<br>')}</div></div>`; break;
+                        case 'staff-comments': content += `<div class="section page-break-before"><h2>スタッフ所感</h2><div class="text-content">${document.getElementById(`staff_${id}`).value.replace(/\n/g, '<br>')}</div></div>`; break;
+                        case 'text-block': const title = document.getElementById(`title_${id}`).value; const layout = document.getElementById(`textLayout_${id}`).value; const textContent = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); const imageSrc = window.textImageData[id]; content += `<div class="section page-break-before"><h2>${title}</h2>`; if (layout === 'text-only' || !imageSrc) { content += `<div class="text-block-content">${textContent}</div>`; } else { const imageSize = document.getElementById(`textImageSize_${id}`).value; const textPart = `<div class="text-part">${textContent}</div>`; const imagePart = `<div class="image-part" style="flex-basis: ${imageSize};"><img src="${imageSrc}"></div>`; content += `<div class="text-block-content"><div class="text-image-container">${layout === 'text-image-left' ? imagePart + textPart : textPart + imagePart}</div></div>`; } content += `</div>`; break;
                     }
                 } catch (e) { content += `<p style="color:red;">エラー: ${e.message}</p>`; }
             });
             content += '</div></body></html>';
             return content;
         }
-        
-        // トースト表示
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             if (!toast) return;
@@ -839,8 +716,6 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, 3000);
         }
-        
-        // 初期化
         document.addEventListener('DOMContentLoaded', () => {
             initDragDrop();
             setupFileUploads();
