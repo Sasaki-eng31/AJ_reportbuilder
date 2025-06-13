@@ -492,22 +492,21 @@
                                     <button class="btn btn-secondary" onclick="addProductFromMaster(${id})">商品を追加</button>
                                 </div>
                            </div>`;
+                case 'demographics-chart':
+                    return `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})"><option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div><div class="chart-container" id="chart_${id}">${generateChart('age')}</div><div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..."></textarea></div>`;
+                case 'image':
+                    return `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}"></div><div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div><div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div><div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`;
+                case 'customer-voice':
+                    return `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;"></textarea></div>`;
+                case 'staff-comments':
+                    return `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;"></textarea></div>`;
+                case 'text-block':
+                    return `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})"></div><div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div><div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})"></textarea></div><div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div><div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`;
                 default:
-                    return getComponentContentFallback(type, id);
+                    return '<p>不明なコンポーネントです。</p>';
             }
         }
         
-        function getComponentContentFallback(type, id) {
-            const contents = {
-                'demographics-chart': `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})"><option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div><div class="chart-container" id="chart_${id}"></div><div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..."></textarea></div>`,
-                'image': `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}"></div><div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div><div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div><div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`,
-                'customer-voice': `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;"></textarea></div>`,
-                'staff-comments': `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;"></textarea></div>`,
-                'text-block': `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})"></div><div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div><div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})"></textarea></div><div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div><div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`
-            };
-            return contents[type] || '';
-        }
-
         function addReviewItem(componentId) {
             const container = document.getElementById(`review-items-container-${componentId}`);
             const newItem = document.createElement('div');
@@ -518,16 +517,8 @@
 
         // メーカー選択肢を生成
         function populateMakerOptions() {
-            if (!csvData.productSales || csvData.productSales.length < 2) return;
-            const headers = csvData.productSales[0];
-            const makerIndex = headers.indexOf('グループコード');
-            if (makerIndex === -1) { showToast('売上CSVに「グループコード」列がありません。', 'error'); return; }
-
+            if (productMasterData.size === 0) return;
             const makers = new Set();
-            csvData.productSales.slice(1).forEach(row => {
-                const makerName = row[makerIndex]?.trim();
-                if (makerName) makers.add(makerName);
-            });
             productMasterData.forEach(prod => {
                 if (prod.group) makers.add(prod.group);
             });
@@ -713,9 +704,13 @@
             const headers = data[0].map(h => h.toLowerCase());
             const items = [];
             let total = 0;
+            // Use a flexible way to find the quantity column, assuming it might be '数量' or '販売点数'
+            const qtyIndex = headers.indexOf('数量') > -1 ? headers.indexOf('数量') : headers.indexOf('販売点数');
+            if (qtyIndex === -1) return `<div><p>数量データ列が見つかりません</p></div>`;
+
             data.slice(1).forEach(row => {
                 const label = row[1]?.trim();
-                const value = parseInt(row[9]?.replace(/,/g, ''), 10) || 0;
+                const value = parseInt(row[qtyIndex]?.replace(/,/g, ''), 10) || 0;
                 if (label && value > 0) { items.push({ label, value }); total += value; }
             });
             if (items.length === 0) return `<div><p>有効なデータがありません</p></div>`;
