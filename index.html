@@ -475,11 +475,11 @@
                            <div class="form-group"><label>イベント名</label><input type="text" value="アナザー・宮城" id="event_${id}"></div>
                            <div class="form-group"><label>実施期間</label><input type="text" value="2025年4月29日(火)〜5月18日(日) 【20日間】" id="period_${id}"></div>`;
                 case 'sales-summary':
-                    return `<p style="font-size:0.9em; color:#666; margin-bottom:15px;">商品別売上CSVをアップロードすると、イベント全体の売上などが自動で計算されます。</p>
+                    return `<p style="font-size:0.9em; color:#666; margin-bottom:15px;">商品別売上CSVと取引データCSVをアップロードすると、イベント全体の売上などが自動で計算されます。</p>
                             <div class="form-group"><label>純売上(税抜)</label><input type="text" id="sales_${id}" readonly style="background:#eee;"></div>
-                           <div class="form-group"><label>販売点数 合計</label><input type="text" id="qtysum_${id}" readonly style="background:#eee;"></div>
+                           <div class="form-group"><label>購入客数</label><input type="text" id="customers_${id}" readonly style="background:#eee;"></div>
                            <div class="form-group"><label>平均購入単価</label><input type="text" id="avgprice_${id}" readonly style="background:#eee;"></div>
-                           <button class="btn btn-secondary" onclick="loadSalesData(${id})" style="margin-top: 10px;">商品別売上データから計算</button>`;
+                           <button class="btn btn-secondary" onclick="loadSalesData(${id})" style="margin-top: 10px;">データから計算</button>`;
                 case 'event-review':
                     return `<div id="review-items-container-${id}"></div>
                             <button class="btn btn-secondary" onclick="addReviewItem(${id})" style="margin-top: 10px;">＋ 項目を追加</button>`;
@@ -766,25 +766,45 @@
         function handleTextBlockImageUpload(id) { const f = document.getElementById(`textImageFile_${id}`); if (!f.files[0]) return; const r = new FileReader(); r.onload = e => { window.textImageData[id] = e.target.result; updateTextBlockDisplay(id); }; r.readAsDataURL(f.files[0]); }
         function updateTextBlockDisplay(id) { const p = document.getElementById(`textPreview_${id}`); const l = document.getElementById(`textLayout_${id}`).value; const c = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); if (l === 'text-only') { p.innerHTML = c; return; } const iS = document.getElementById(`textImageSize_${id}`).value; const iD = window.textImageData[id]; let iH = iD ? `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0;"><img src="${iD}" style="width: 100%; border-radius: 8px;"></div>` : `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0; border: 2px dashed #ccc; display:flex; align-items:center; justify-content:center; min-height:100px; color:#999;">画像</div>`; const tH = `<div class="text-part" style="flex: 1;">${c}</div>`; p.innerHTML = `<div style="display: flex; gap: 20px; align-items: flex-start; flex-direction: ${l === 'text-image-right' ? 'row' : 'row-reverse'};">${l === 'text-image-right' ? tH + iH : iH + tH}</div>`; }
         function loadSalesData(id) {
-            const data = csvData.productSales;
-            if (!data || data.length < 2) { showToast('商品別売上データをアップロードしてください', 'error'); return; }
+            const salesCSV = csvData.productSales;
+            const transCSV = csvData.transaction;
+
+            if (!salesCSV || salesCSV.length < 2) {
+                showToast('商品別売上データをアップロードしてください', 'error');
+                return;
+            }
+
             try {
-                const headers = data[0];
-                const netSalesIndex = headers.indexOf('純売上(税抜)');
-                const qtyIndex = headers.indexOf('販売点数');
+                // 売上合計と点数合計を商品別売上CSVから取得
+                const salesHeaders = salesCSV[0];
+                const netSalesIndex = salesHeaders.indexOf('純売上(税抜)');
+                const qtyIndex = salesHeaders.indexOf('販売点数');
                 if (netSalesIndex === -1 || qtyIndex === -1) throw new Error('商品別売上CSVに「純売上(税抜)」または「販売点数」列が見つかりません。');
                 
-                let totalRow = data.find(row => row[0] && row[0].includes('【合計】'));
-                if(!totalRow) totalRow = data[data.length -1];
+                let totalRow = salesCSV.find(row => row[0] && row[0].includes('【合計】'));
+                if(!totalRow) totalRow = salesCSV[salesCSV.length -1]; // 合計行がなければ最終行と仮定
 
                 const totalSales = parseFloat(totalRow[netSalesIndex]) || 0;
-                const totalQty = parseFloat(totalRow[qtyIndex]) || 0;
-                const avgPrice = (totalQty > 0) ? Math.floor(totalSales / totalQty) : 0;
-
+                
+                // 購入客数を取引データCSVから取得
+                let customerCount = 'N/A';
+                if (transCSV && transCSV.length >= 2) {
+                    const transHeaders = transCSV[0];
+                    const customerIdIndex = transHeaders.indexOf('取引ID');
+                    if (customerIdIndex !== -1) {
+                        const customerSet = new Set(transCSV.slice(1).map(row => row[customerIdIndex]).filter(Boolean));
+                        customerCount = customerSet.size;
+                    }
+                }
+                
+                // 平均単価を計算
+                const avgPrice = (customerCount !== 'N/A' && customerCount > 0) ? Math.floor(totalSales / customerCount) : 0;
+                
                 document.getElementById(`sales_${id}`).value = `¥${totalSales.toLocaleString()}`;
-                document.getElementById(`qtysum_${id}`).value = `${totalQty.toLocaleString()}点`;
-                document.getElementById(`avgprice_${id}`).value = `¥${avgPrice.toLocaleString()}`;
+                document.getElementById(`customers_${id}`).value = customerCount !== 'N/A' ? `${customerCount}人` : '（取引データ未入力）';
+                document.getElementById(`avgprice_${id}`).value = avgPrice > 0 ? `¥${avgPrice.toLocaleString()}` : '（計算不可）';
                 showToast('売上情報を計算しました');
+
             } catch (e) {
                 showToast(`計算エラー: ${e.message}`, 'error');
             }
@@ -849,7 +869,7 @@
                 try {
                     switch (type) {
                         case 'header': content += `<div class="section"><div class="report-header"><h1>${document.getElementById(`event_${id}`).value}</h1><p>${document.getElementById(`company_${id}`).value} ${document.getElementById(`honorific_${id}`).value}</p><p class="period">${document.getElementById(`period_${id}`).value}</p></div></div>`; break;
-                        case 'sales-summary': content += `<div class="section"><h2>売上サマリー（イベント全体）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>販売点数 合計</strong> ${document.getElementById(`qtysum_${id}`).value}</td><td><strong>平均購入単価</strong> ${document.getElementById(`avgprice_${id}`).value}</td></tr></table></div>`; break;
+                        case 'sales-summary': content += `<div class="section"><h2>売上サマリー（イベント全体）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>購入客数</strong> ${document.getElementById(`customers_${id}`).value}</td><td><strong>平均購入単価</strong> ${document.getElementById(`avgprice_${id}`).value}</td></tr></table></div>`; break;
                         case 'event-review': content += `<div class="section page-break-before"><h2>MD全体の振り返り</h2>`; component.querySelectorAll('.review-item').forEach(item => { const title = item.querySelector('.review-item-title').value; const reviewContent = item.querySelector('.review-item-content').value.replace(/\n/g, '<br>'); if (title || reviewContent) { content += `<h3>${title}</h3><div class="event-review-body">${reviewContent}</div>`; } }); content += `</div>`; break;
                         case 'product-table': content += `<div class="section page-break-before"><h2>商品別売上表</h2>`; const tableNode = component.querySelector('.data-table'); if (tableNode) { const clonedTable = tableNode.cloneNode(true); clonedTable.querySelectorAll('input.editable-cell').forEach(input => { const text = document.createTextNode(input.value); input.parentNode.replaceChild(text, input); }); clonedTable.querySelector('thead tr').lastChild.remove(); clonedTable.querySelectorAll('tbody tr').forEach(tr => { if(tr.lastChild) tr.lastChild.remove(); }); content += clonedTable.outerHTML; } content += `</div>`; break;
                         case 'demographics-chart': content += `<div class="section page-break-before"><h2>客層分析 (${document.querySelector(`#chartType_${id} option:checked`).textContent})</h2>`; const chartContainer = document.getElementById(`chart_${id}`); if (chartContainer) { let legendHtml = ''; chartContainer.querySelectorAll('div[style*="display: flex"] > div:last-child > div').forEach(item => { const color = item.querySelector('div[style*="background-color"]').style.backgroundColor; const label = item.querySelector('input[type="text"]').value; const value = item.querySelector('span').textContent; legendHtml += `<div class="legend-item"><div class="legend-color" style="background-color: ${color};"></div><span class="legend-label">${label}</span><span class="legend-value">${value}</span></div>`; }); const commentText = document.getElementById(`comment_${id}`).value; content += `<div class="demographics-container"><div class="chart-and-legend"><div class="chart-part">${chartContainer.querySelector('svg')?.outerHTML || ''}</div><div class="legend-part-wrapper"><div class="legend-part">${legendHtml}</div></div></div>`; if (commentText.trim() !== '') { content += `<div class="analysis-comment-wrapper"><h3>分析コメント</h3><div class="comment-part">${commentText.replace(/\n/g, '<br>')}</div></div>`; } content += `</div>`; } content += `</div>`; break;
