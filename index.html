@@ -709,16 +709,18 @@
                 }
                 return -1;
             };
-            const labelIndex = findIndex(['客層名', '分類']);
+            const labelIndex = findIndex(['客層名', '分類', 'ラベル']);
             const valueIndex = findIndex(['客数']);
 
             if (labelIndex === -1 || valueIndex === -1) {
-                return `<div><p>CSVに「客層名」または「客数」の列が見つかりません</p></div>`;
+                return `<div><p>CSVに「客層名/ラベル」または「客数」の列が見つかりません</p></div>`;
             }
 
             const items = [];
             let total = 0;
-            data.slice(1).forEach(row => {
+            data.slice(1)
+                .filter(row => row[labelIndex] !== '合計')
+                .forEach(row => {
                 const label = row[labelIndex]?.trim();
                 const value = parseInt(row[valueIndex]?.replace(/,/g, ''), 10) || 0;
                 if (label && value > 0) {
