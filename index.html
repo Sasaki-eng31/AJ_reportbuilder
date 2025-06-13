@@ -397,7 +397,6 @@
             }
         }
         
-        // ドラッグ&ドロップ初期化
         function initDragDrop() {
             document.querySelectorAll('.component-item').forEach(item => {
                 item.addEventListener('dragstart', e => { draggedElement = e.target; });
@@ -506,7 +505,7 @@
                     return '<p>不明なコンポーネントです。</p>';
             }
         }
-        
+
         function addReviewItem(componentId) {
             const container = document.getElementById(`review-items-container-${componentId}`);
             const newItem = document.createElement('div');
@@ -697,7 +696,6 @@
             }
         }
         
-        // --- 以下の関数は変更ありません ---
         function generateChart(chartType) {
             const data = csvData[chartType];
             if (!data || data.length < 2) return `<div><p>データを入力してください</p></div>`;
@@ -706,11 +704,17 @@
             let total = 0;
             // Use a flexible way to find the quantity column, assuming it might be '数量' or '販売点数'
             const qtyIndex = headers.indexOf('数量') > -1 ? headers.indexOf('数量') : headers.indexOf('販売点数');
-            if (qtyIndex === -1) return `<div><p>数量データ列が見つかりません</p></div>`;
+            if (qtyIndex === -1 && headers.indexOf('value') === -1) return `<div><p>数量データ列が見つかりません</p></div>`;
 
             data.slice(1).forEach(row => {
                 const label = row[1]?.trim();
-                const value = parseInt(row[qtyIndex]?.replace(/,/g, ''), 10) || 0;
+                let value;
+                if(qtyIndex > -1){
+                    value = parseInt(row[qtyIndex]?.replace(/,/g, ''), 10) || 0;
+                } else if(headers.indexOf('value') > -1) {
+                    value = parseInt(row[headers.indexOf('value')]?.replace(/,/g, ''), 10) || 0;
+                }
+                
                 if (label && value > 0) { items.push({ label, value }); total += value; }
             });
             if (items.length === 0) return `<div><p>有効なデータがありません</p></div>`;
@@ -778,19 +782,19 @@
                 .data-table th { background: #efefef; font-weight: bold; font-family: 'Hiragino Sans', sans-serif; }
                 .data-table tr[style*="font-weight:bold"] { background-color: #efefef !important; font-weight: bold; font-size: 10pt; }
                 .data-table .delete-row-btn { display: none; }
-                .demographics-container { display: flex; flex-direction: column; gap: 20px; page-break-inside: avoid; }
-                .chart-and-legend { display: flex; gap: 30px; align-items: center; }
+                .demographics-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-inside: avoid; }
+                .chart-and-legend { display: flex; gap: 30px; align-items: center; width: 80%; margin: 0 auto; }
                 .chart-part { flex: 0 0 50%; text-align: center; }
                 .chart-part svg { width: 100%; max-width: 400px; height: auto; }
                 .legend-part-wrapper { flex: 1; }
-                .legend-part { column-count: 1; }
+                .legend-part { column-count: 1; text-align: left; }
                 .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 10pt; page-break-inside: avoid; }
                 .legend-color { width: 16px; height: 16px; margin-right: 10px; border-radius: 3px; flex-shrink: 0; }
                 .legend-label { margin-right: 10px; }
                 .legend-value { font-weight: bold; }
-                .analysis-comment-wrapper { margin-top: 10px; }
-                .text-content, .comment-part, .event-review-body { white-space: pre-wrap; line-height: 1.8; font-size: 11pt; background: #ffffff; padding: 20px; border-radius: 5px; margin-top: 10px; border: 1px solid #efefef; }
-                .image-section { text-align: center; margin-top: 20px; }
+                .analysis-comment-wrapper { margin-top: 20px; width: 80%; text-align: left; }
+                .text-content, .comment-part, .event-review-body { white-space: pre-wrap; line-height: 1.8; font-size: 11pt; background: #ffffff; padding: 20px; border-radius: 5px; margin-top: 10px; border: 1px solid #efefef; text-align: left;}
+                .image-section { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 70vh; page-break-inside: avoid; text-align: center; margin-top: 20px; }
                 .image-section .image-block { display: inline-block; margin: 10px; text-align: left; vertical-align: top; width: 30%; }
                 .image-section img { max-width: 100%; height: auto; border: 1px solid #ddd; padding: 4px; margin-bottom: 5px; }
                 .image-section p { font-size: 9pt; color: #555; text-align: center; }
