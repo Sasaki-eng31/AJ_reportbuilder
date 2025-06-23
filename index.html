@@ -252,7 +252,7 @@
                 <h3>📦 コンポーネント</h3>
                 <div class="component-library">
                     <div class="component-item" draggable="true" data-type="header"><h4>◆ ヘッダー情報</h4><p>会社名・期間・タイトルなど</p></div>
-                     <div class="component-item" draggable="true" data-type="sales-summary"><h4>◆ 売上サマリー (MD全体)</h4><p>総売上・客数・平均単価</p></div>
+                     <div class="component-item" draggable="true" data-type="sales-summary"><h4>◆ 売上サマリー (MD全体)</h4><p>総売上・客数・客単価</p></div>
                      <div class="component-item" draggable="true" data-type="event-review"><h4>◆ MD全体の振り返り</h4><p>番号なしの見出しとコメント</p></div>
                     <div class="component-item" draggable="true" data-type="product-table"><h4>◆ 商品別売上表</h4><p>商品名・販売数・売上一覧</p></div>
                     <div class="component-item" draggable="true" data-type="demographics-chart"><h4>◆ 客層分析チャート</h4><p>年代・性別・来店回数など</p></div>
@@ -311,7 +311,7 @@
             });
         }
         
-        // ファイルアップロードハンドラ
+        // ファイルアップロードハンドラ (★最初の正常なバージョンに戻しました)
         function handleFileUpload(input, dataType) {
             if (!input.files || !input.files[0]) return;
             var file = input.files[0];
@@ -339,7 +339,7 @@
                         const idx = {
                             code: findIndex(['商品コード', '品番']),
                             name: findIndex(['商品名']),
-                            price: findIndex(['販売価格', '単価', '商品単価']),
+                            price: findIndex(['販売価格', '単価', '商品単価']), // ← 正常に動作していた設定
                             group: findIndex(['グループコード', 'グループ', 'メーカー', '社名'])
                         };
 
@@ -462,7 +462,7 @@
                     return `<div style="display: flex; gap: 15px; align-items: flex-end;">
                                <div class="form-group" style="flex: 1;">
                                    <label>会社名</label>
-                                   <input type="text" value="株式会社こしき" id="company_${id}">
+                                   <input type="text" value="株式会社こしき" id="company_${id}" spellcheck="true">
                                </div>
                                <div class="form-group" style="flex-basis: 100px;">
                                    <label>敬称</label>
@@ -472,13 +472,13 @@
                                    </select>
                                </div>
                            </div>
-                           <div class="form-group"><label>イベント名</label><input type="text" value="アナザー・宮城" id="event_${id}"></div>
-                           <div class="form-group"><label>実施期間</label><input type="text" value="2025年4月29日(火)〜5月18日(日) 【20日間】" id="period_${id}"></div>`;
-                case 'sales-summary':
+                           <div class="form-group"><label>イベント名</label><input type="text" value="アナザー・宮城" id="event_${id}" spellcheck="true"></div>
+                           <div class="form-group"><label>実施期間</label><input type="text" value="2025年4月29日(火)〜5月18日(日) 【20日間】" id="period_${id}" spellcheck="true"></div>`;
+                case 'sales-summary': // ★修正点①
                     return `<p style="font-size:0.9em; color:#666; margin-bottom:15px;">商品別売上CSVと取引データCSVをアップロードすると、イベント全体の売上などが自動で計算されます。</p>
                             <div class="form-group"><label>純売上(税抜)</label><input type="text" id="sales_${id}" readonly style="background:#eee;"></div>
                            <div class="form-group"><label>購入客数</label><input type="text" id="customers_${id}" readonly style="background:#eee;"></div>
-                           <div class="form-group"><label>平均購入単価</label><input type="text" id="avgprice_${id}" readonly style="background:#eee;"></div>
+                           <div class="form-group"><label>客単価</label><input type="text" id="customerUnitPrice_${id}" readonly style="background:#eee;"></div>
                            <button class="btn btn-secondary" onclick="loadSalesData(${id})" style="margin-top: 10px;">データから計算</button>`;
                 case 'event-review':
                     return `<div id="review-items-container-${id}"></div>
@@ -493,26 +493,26 @@
                                     <button class="btn btn-secondary" onclick="addProductFromMaster(${id})">商品を追加</button>
                                 </div>
                            </div>`;
-                case 'demographics-chart':
-                    return `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})"><option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div><div class="chart-container" id="chart_${id}">${generateChart('age')}</div><div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..."></textarea></div>`;
-                case 'image':
-                    return `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}"></div><div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div><div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div><div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`;
-                case 'customer-voice':
-                    return `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;"></textarea></div>`;
-                case 'staff-comments':
-                    return `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;"></textarea></div>`;
-                case 'text-block':
-                    return `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})"></div><div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div><div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})"></textarea></div><div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div><div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`;
+                case 'demographics-chart': // ★修正点③
+                    return `<div class="form-group"><label>分析種別</label><select id="chartType_${id}" onchange="updateChart(${id})"><option value="age">年代別</option><option value="gender">性別</option><option value="visitFrequency">来店回数</option><option value="visitPurpose">来店目的</option></select></div><div class="chart-container" id="chart_${id}">${generateChart('age')}</div><div class="form-group"><label>分析コメント</label><textarea rows="4" id="comment_${id}" placeholder="客層分析コメント..." spellcheck="true"></textarea></div>`;
+                case 'image': // ★修正点③
+                    return `<div class="form-group"><label>画像タイトル</label><input type="text" value="商品写真" id="imageTitle_${id}" spellcheck="true"></div><div class="form-group"><label>レイアウト</label><select id="imageLayout_${id}" onchange="updateImageLayout(${id})"><option value="single" selected>1枚表示</option><option value="two">2枚横並び</option><option value="three">3枚横並び</option></select></div><div id="imageUploadArea_${id}">${createImageUploadInputs(id, 1)}</div><div id="imagePreview_${id}" style="margin-top: 15px; border: 2px dashed #ddd; padding: 20px; border-radius: 8px; color: #666; text-align: center;"><p>画像をアップロードしてください</p></div>`;
+                case 'customer-voice': // ★修正点③
+                    return `<div class="form-group"><label>お客様の声</label><textarea rows="6" id="voice_${id}" placeholder="お客様からのフィードバック..." style="white-space: pre-wrap;" spellcheck="true"></textarea></div>`;
+                case 'staff-comments': // ★修正点③
+                    return `<div class="form-group"><label>スタッフからの所感・提案</label><textarea rows="6" id="staff_${id}" placeholder="販売活動での気づきや改善提案..." style="white-space: pre-wrap;" spellcheck="true"></textarea></div>`;
+                case 'text-block': // ★修正点③
+                    return `<div class="form-group"><label>タイトル</label><input type="text" value="カスタムセクション" id="title_${id}" oninput="updateTextBlockDisplay(${id})" spellcheck="true"></div><div class="form-group"><label>レイアウト</label><select id="textLayout_${id}" onchange="updateTextLayout(${id})"><option value="text-only" selected>テキストのみ</option><option value="text-image-right">テキスト(左)＋画像(右)</option><option value="text-image-left">画像(左)＋テキスト(右)</option></select></div><div class="form-group"><label>内容</label><textarea rows="6" id="content_${id}" placeholder="自由にテキストを入力..." oninput="updateTextBlockDisplay(${id})" spellcheck="true"></textarea></div><div id="textImageOptions_${id}" style="display:none; border-top: 1px solid #eee; padding-top: 15px;"><div class="form-group"><label>画像ファイル</label><input type="file" accept="image/*" id="textImageFile_${id}" onchange="handleTextBlockImageUpload(${id})"></div><div class="form-group"><label>画像サイズ</label><select id="textImageSize_${id}" onchange="updateTextBlockDisplay(${id})"><option value="30%">小 (30%)</option><option value="40%" selected>中 (40%)</option><option value="50%">大 (50%)</option></select></div></div><div style="margin-top: 15px; font-weight: bold;">プレビュー:</div><div id="textPreview_${id}" style="border: 2px dashed #ddd; padding: 20px; border-radius: 8px; min-height: 100px; line-height: 1.6;"></div>`;
                 default:
                     return '<p>不明なコンポーネントです。</p>';
             }
         }
 
-        function addReviewItem(componentId) {
+        function addReviewItem(componentId) { // ★修正点③
             const container = document.getElementById(`review-items-container-${componentId}`);
             const newItem = document.createElement('div');
             newItem.className = 'review-item';
-            newItem.innerHTML = `<div class="form-group"><label>見出し</label><input type="text" class="review-item-title" placeholder="振り返りの見出し..."></div><div class="form-group"><label>内容</label><textarea class="review-item-content" rows="4" placeholder="具体的な内容..."></textarea></div><button class="btn btn-secondary" style="background: #e74c3c; font-size: 0.8em; padding: 5px 10px;" onclick="this.parentElement.remove()">この項目を削除</button>`;
+            newItem.innerHTML = `<div class="form-group"><label>見出し</label><input type="text" class="review-item-title" placeholder="振り返りの見出し..." spellcheck="true"></div><div class="form-group"><label>内容</label><textarea class="review-item-content" rows="4" placeholder="具体的な内容..." spellcheck="true"></textarea></div><button class="btn btn-secondary" style="background: #e74c3c; font-size: 0.8em; padding: 5px 10px;" onclick="this.parentElement.remove()">この項目を削除</button>`;
             container.appendChild(newItem);
         }
 
@@ -697,7 +697,7 @@
             }
         }
         
-        function generateChart(chartType) {
+        function generateChart(chartType) { // ★修正点③
             const data = csvData[chartType];
             if (!data || data.length < 2) return `<div><p>データを入力してください</p></div>`;
             
@@ -747,7 +747,7 @@
             items.forEach((item, i) => {
                 legendHtml += `<div style="display: flex; align-items: center; margin-bottom: 8px;">
                                <div style="width: 16px; height: 16px; background-color: ${colors[i % colors.length]}; margin-right: 8px; border-radius: 2px;"></div>
-                               <input type="text" value="${item.label}" style="border: none; padding: 2px 6px; margin-right: 8px; font-size: 14px; background: white; width: 120px;">
+                               <input type="text" value="${item.label}" style="border: none; padding: 2px 6px; margin-right: 8px; font-size: 14px; background: white; width: 120px;" spellcheck="true">
                                <span style="font-size: 14px; color: #2c3e50; font-weight: bold;">${item.value}人 (${((item.value / total) * 100).toFixed(1)}%)</span></div>`;
             });
             chartHtml += legendHtml + '</div></div>';
@@ -758,14 +758,14 @@
             const chartType = document.getElementById(`chartType_${componentId}`).value;
             document.getElementById('chart_' + componentId).innerHTML = generateChart(chartType);
         }
-        function createImageUploadInputs(id, count) { let h = ''; for (let i = 1; i <= count; i++) { h += `<div class="form-group" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;"><label>画像ファイル ${i}</label><input type="file" accept="image/*" id="imageFile${i}_${id}" onchange="handleMultiImageUpload(${id}, ${i})"><label style="margin-top:10px;">画像 ${i} の説明文</label><textarea rows="2" id="imageCaption${i}_${id}" placeholder="この画像の説明..." oninput="updateImageDisplay(${id})"></textarea></div>`; } return h; }
+        function createImageUploadInputs(id, count) { let h = ''; for (let i = 1; i <= count; i++) { h += `<div class="form-group" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;"><label>画像ファイル ${i}</label><input type="file" accept="image/*" id="imageFile${i}_${id}" onchange="handleMultiImageUpload(${id}, ${i})"><label style="margin-top:10px;">画像 ${i} の説明文</label><textarea rows="2" id="imageCaption${i}_${id}" placeholder="この画像の説明..." oninput="updateImageDisplay(${id})" spellcheck="true"></textarea></div>`; } return h; }
         function updateImageLayout(id) { const l = document.getElementById('imageLayout_' + id).value; document.getElementById('imageUploadArea_' + id).innerHTML = createImageUploadInputs(id, l === 'single' ? 1 : l === 'two' ? 2 : 3); updateImageDisplay(id); }
         function handleMultiImageUpload(id, idx) { const f = document.getElementById(`imageFile${idx}_${id}`); if (!f.files[0]) return; const r = new FileReader(); r.onload = e => { if (!window.imageData[id]) window.imageData[id] = {}; window.imageData[id][idx] = e.target.result; updateImageDisplay(id); }; r.readAsDataURL(f.files[0]); }
         function updateImageDisplay(id) { const p = document.getElementById('imagePreview_' + id); const d = window.imageData[id] || {}; if (Object.keys(d).length === 0) { p.innerHTML = '<p>画像をアップロードしてください</p>'; return; } let h = '<div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">'; Object.keys(d).sort().forEach(idx => { const cap = document.getElementById(`imageCaption${idx}_${id}`)?.value.replace(/\n/g, '<br>') || ''; h += `<div style="flex: 1; min-width: 200px; max-width: 300px; text-align: center;"><img src="${d[idx]}" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"><p style="font-size: 0.9em; color: #666; margin-top: 8px; text-align: left;">${cap}</p></div>`; }); p.innerHTML = h + '</div>'; }
         function updateTextLayout(id) { document.getElementById(`textImageOptions_${id}`).style.display = document.getElementById(`textLayout_${id}`).value === 'text-only' ? 'none' : 'block'; updateTextBlockDisplay(id); }
         function handleTextBlockImageUpload(id) { const f = document.getElementById(`textImageFile_${id}`); if (!f.files[0]) return; const r = new FileReader(); r.onload = e => { window.textImageData[id] = e.target.result; updateTextBlockDisplay(id); }; r.readAsDataURL(f.files[0]); }
         function updateTextBlockDisplay(id) { const p = document.getElementById(`textPreview_${id}`); const l = document.getElementById(`textLayout_${id}`).value; const c = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); if (l === 'text-only') { p.innerHTML = c; return; } const iS = document.getElementById(`textImageSize_${id}`).value; const iD = window.textImageData[id]; let iH = iD ? `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0;"><img src="${iD}" style="width: 100%; border-radius: 8px;"></div>` : `<div class="image-part" style="flex-basis: ${iS}; flex-shrink: 0; border: 2px dashed #ccc; display:flex; align-items:center; justify-content:center; min-height:100px; color:#999;">画像</div>`; const tH = `<div class="text-part" style="flex: 1;">${c}</div>`; p.innerHTML = `<div style="display: flex; gap: 20px; align-items: flex-start; flex-direction: ${l === 'text-image-right' ? 'row' : 'row-reverse'};">${l === 'text-image-right' ? tH + iH : iH + tH}</div>`; }
-        function loadSalesData(id) {
+        function loadSalesData(id) { // ★修正点①
             const salesCSV = csvData.productSales;
             const transCSV = csvData.transaction;
 
@@ -778,8 +778,7 @@
                 // 売上合計と点数合計を商品別売上CSVから取得
                 const salesHeaders = salesCSV[0];
                 const netSalesIndex = salesHeaders.indexOf('純売上(税抜)');
-                const qtyIndex = salesHeaders.indexOf('販売点数');
-                if (netSalesIndex === -1 || qtyIndex === -1) throw new Error('商品別売上CSVに「純売上(税抜)」または「販売点数」列が見つかりません。');
+                if (netSalesIndex === -1) throw new Error('商品別売上CSVに「純売上(税抜)」列が見つかりません。');
                 
                 let totalRow = salesCSV.find(row => row[0] && row[0].includes('【合計】'));
                 if(!totalRow) totalRow = salesCSV[salesCSV.length -1]; // 合計行がなければ最終行と仮定
@@ -797,12 +796,12 @@
                     }
                 }
                 
-                // 平均単価を計算
-                const avgPrice = (customerCount !== 'N/A' && customerCount > 0) ? Math.floor(totalSales / customerCount) : 0;
+                // 客単価を計算
+                const customerUnitPrice = (customerCount !== 'N/A' && customerCount > 0) ? Math.floor(totalSales / customerCount) : 0;
                 
                 document.getElementById(`sales_${id}`).value = `¥${totalSales.toLocaleString()}`;
                 document.getElementById(`customers_${id}`).value = customerCount !== 'N/A' ? `${customerCount}人` : '（取引データ未入力）';
-                document.getElementById(`avgprice_${id}`).value = avgPrice > 0 ? `¥${avgPrice.toLocaleString()}` : '（計算不可）';
+                document.getElementById(`customerUnitPrice_${id}`).value = customerUnitPrice > 0 ? `¥${customerUnitPrice.toLocaleString()}` : '（計算不可）';
                 showToast('売上情報を計算しました');
 
             } catch (e) {
@@ -854,11 +853,17 @@
                 .legend-value { font-weight: bold; }
                 .analysis-comment-wrapper { margin: 0 auto; width: 80%; text-align: left; }
                 .text-content, .comment-part, .event-review-body { white-space: pre-wrap; line-height: 1.8; font-size: 11pt; background: #ffffff; padding: 20px; border-radius: 5px; margin-top: 10px; border: 1px solid #efefef; text-align: left;}
-                .image-section-wrapper { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 80vh; text-align: center; }
-                .image-section { margin-top: 20px; }
-                .image-section .image-block { display: inline-block; margin: 10px; text-align: left; vertical-align: top; width: 30%; }
-                .image-section img { max-width: 100%; height: auto; border: 1px solid #ddd; padding: 4px; margin-bottom: 5px; }
-                .image-section p { font-size: 9pt; color: #555; text-align: center; }
+                
+                /* ★修正点②：PDF画像サイズ調整 */
+                .image-section-wrapper { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+                .image-section { display: flex; gap: 20px; justify-content: center; align-items: flex-start; margin-top: 20px; width: 100%; }
+                .image-section .image-block { text-align: center; }
+                .image-section.layout-single .image-block { width: 70%; max-width: 600px; margin: 0 auto; }
+                .image-section.layout-two .image-block { width: 48%; }
+                .image-section.layout-three .image-block { width: 32%; }
+                .image-section .image-block img { width: 100%; height: auto; border: 1px solid #ddd; padding: 4px; border-radius: 8px; margin-bottom: 5px; }
+                .image-section .image-block p { font-size: 9pt; color: #555; text-align: left; }
+
                 .text-block-content .text-image-container { display:flex; gap: 20px; align-items: flex-start; }
                 .text-block-content .image-part { flex-shrink: 0; }
                 .text-block-content .image-part img { width: 100%; height: auto; border-radius: 8px; }
@@ -869,14 +874,41 @@
                 try {
                     switch (type) {
                         case 'header': content += `<div class="section"><div class="report-header"><h1>${document.getElementById(`event_${id}`).value}</h1><p>${document.getElementById(`company_${id}`).value} ${document.getElementById(`honorific_${id}`).value}</p><p class="period">${document.getElementById(`period_${id}`).value}</p></div></div>`; break;
-                        case 'sales-summary': content += `<div class="section"><h2>売上サマリー（イベント全体）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>購入客数</strong> ${document.getElementById(`customers_${id}`).value}</td><td><strong>平均購入単価</strong> ${document.getElementById(`avgprice_${id}`).value}</td></tr></table></div>`; break;
+                        case 'sales-summary': content += `<div class="section"><h2>売上サマリー（イベント全体）</h2><table class="sales-summary-table"><tr><td><strong>純売上(税抜)</strong> ${document.getElementById(`sales_${id}`).value}</td><td><strong>購入客数</strong> ${document.getElementById(`customers_${id}`).value}</td><td><strong>客単価</strong> ${document.getElementById(`customerUnitPrice_${id}`).value}</td></tr></table></div>`; break;
                         case 'event-review': content += `<div class="section page-break-before"><h2>MD全体の振り返り</h2>`; component.querySelectorAll('.review-item').forEach(item => { const title = item.querySelector('.review-item-title').value; const reviewContent = item.querySelector('.review-item-content').value.replace(/\n/g, '<br>'); if (title || reviewContent) { content += `<h3>${title}</h3><div class="event-review-body">${reviewContent}</div>`; } }); content += `</div>`; break;
                         case 'product-table': content += `<div class="section page-break-before"><h2>商品別売上表</h2>`; const tableNode = component.querySelector('.data-table'); if (tableNode) { const clonedTable = tableNode.cloneNode(true); clonedTable.querySelectorAll('input.editable-cell').forEach(input => { const text = document.createTextNode(input.value); input.parentNode.replaceChild(text, input); }); clonedTable.querySelector('thead tr').lastChild.remove(); clonedTable.querySelectorAll('tbody tr').forEach(tr => { if(tr.lastChild) tr.lastChild.remove(); }); content += clonedTable.outerHTML; } content += `</div>`; break;
                         case 'demographics-chart': content += `<div class="section page-break-before"><h2>客層分析 (${document.querySelector(`#chartType_${id} option:checked`).textContent})</h2>`; const chartContainer = document.getElementById(`chart_${id}`); if (chartContainer) { let legendHtml = ''; chartContainer.querySelectorAll('div[style*="display: flex"] > div:last-child > div').forEach(item => { const color = item.querySelector('div[style*="background-color"]').style.backgroundColor; const label = item.querySelector('input[type="text"]').value; const value = item.querySelector('span').textContent; legendHtml += `<div class="legend-item"><div class="legend-color" style="background-color: ${color};"></div><span class="legend-label">${label}</span><span class="legend-value">${value}</span></div>`; }); const commentText = document.getElementById(`comment_${id}`).value; content += `<div class="demographics-container"><div class="chart-and-legend"><div class="chart-part">${chartContainer.querySelector('svg')?.outerHTML || ''}</div><div class="legend-part-wrapper"><div class="legend-part">${legendHtml}</div></div></div>`; if (commentText.trim() !== '') { content += `<div class="analysis-comment-wrapper"><h3>分析コメント</h3><div class="comment-part">${commentText.replace(/\n/g, '<br>')}</div></div>`; } content += `</div>`; } content += `</div>`; break;
-                        case 'image': content += `<div class="section image-section-wrapper page-break-before"><div><h2>${document.getElementById(`imageTitle_${id}`).value}</h2><div class="image-section">${document.getElementById(`imagePreview_${id}`).innerHTML.replace(/<div style="flex: 1[^>]+>/g, '<div class="image-block">')}</div></div></div></div>`; break;
+                        case 'image': // ★修正点②
+                            const imageTitle = document.getElementById(`imageTitle_${id}`).value;
+                            const imageLayout = document.getElementById(`imageLayout_${id}`).value;
+                            let imagesHTML = '';
+                            const imagePreviewContainer = document.getElementById(`imagePreview_${id}`);
+                            const imageBlocks = imagePreviewContainer.querySelectorAll('div[style*="flex: 1"]');
+
+                            if (imageBlocks.length > 0) {
+                                imageBlocks.forEach(block => {
+                                    const imgSrc = block.querySelector('img')?.src;
+                                    const caption = block.querySelector('p')?.innerHTML; // <br> を保持
+                                    if (imgSrc) {
+                                        imagesHTML += `<div class="image-block"><img src="${imgSrc}"><p>${caption || ''}</p></div>`;
+                                    }
+                                });
+                            } else {
+                                imagesHTML = imagePreviewContainer.innerHTML; // "画像をアップロードしてください"等のメッセージ
+                            }
+
+                            content += `<div class="section image-section-wrapper page-break-before">
+                                           <div>
+                                               <h2>${imageTitle}</h2>
+                                               <div class="image-section layout-${imageLayout}">
+                                                   ${imagesHTML}
+                                               </div>
+                                           </div>
+                                       </div>`;
+                            break;
                         case 'customer-voice': content += `<div class="section page-break-before"><h2>お客様の声</h2><div class="text-content">${document.getElementById(`voice_${id}`).value.replace(/\n/g, '<br>')}</div></div>`; break;
                         case 'staff-comments': content += `<div class="section page-break-before"><h2>スタッフ所感</h2><div class="text-content">${document.getElementById(`staff_${id}`).value.replace(/\n/g, '<br>')}</div></div>`; break;
-                        case 'text-block': const title = document.getElementById(`title_${id}`).value; const layout = document.getElementById(`textLayout_${id}`).value; const textContent = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); const imageSrc = window.textImageData[id]; content += `<div class="section page-break-before"><h2>${title}</h2>`; if (layout === 'text-only' || !imageSrc) { content += `<div class="text-block-content">${textContent}</div>`; } else { const imageSize = document.getElementById(`textImageSize_${id}`).value; const textPart = `<div class="text-part">${textContent}</div>`; const imagePart = `<div class="image-part" style="flex-basis: ${imageSize};"><img src="${imageSrc}"></div>`; content += `<div class="text-block-content"><div class="text-image-container">${layout === 'text-image-left' ? imagePart + textPart : textPart + imagePart}</div></div>`; } content += `</div>`; break;
+                        case 'text-block': const title = document.getElementById(`title_${id}`).value; const layout = document.getElementById(`textLayout_${id}`).value; const textContent = document.getElementById(`content_${id}`).value.replace(/\n/g, '<br>'); const imageSrc = window.textImageData[id]; content += `<div class="section page-break-before"><h2>${title}</h2>`; if (layout === 'text-only' || !imageSrc) { content += `<div class="text-block-content"><div class="text-part">${textContent}</div></div>`; } else { const imageSize = document.getElementById(`textImageSize_${id}`).value; const textPart = `<div class="text-part">${textContent}</div>`; const imagePart = `<div class="image-part" style="flex-basis: ${imageSize};"><img src="${imageSrc}"></div>`; content += `<div class="text-block-content"><div class="text-image-container">${layout === 'text-image-left' ? imagePart + textPart : textPart + imagePart}</div></div>`; } content += `</div>`; break;
                     }
                 } catch (e) { content += `<p style="color:red;">エラー: ${e.message}</p>`; }
             });
